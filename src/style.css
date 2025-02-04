@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+/* width */
+::-webkit-scrollbar {
+    width: 8px; /* Reduced width for a more minimalistic look */
+  }
+  
+/* Track */
+::-webkit-scrollbar-track {
+    background: #2d3748; /* Darker background for the track */
+    border-radius: 10px; /* Rounded corners for a smoother appearance */
+}
+  
+/* Handle */
+::-webkit-scrollbar-thumb {
+    background: #4a5568; /* Subtle dark thumb */
+    border-radius: 10px; /* Rounded corners for the thumb */
+    transition: background 0.3s ease; /* Smooth transition on hover */
+}
+  
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+    background: #2d3748; /* Darker thumb color on hover */
+}
