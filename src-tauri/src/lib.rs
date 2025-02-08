@@ -2,7 +2,7 @@ use reqwest::Client;
 use select::document::Document;
 use select::predicate::{Class, Name};
 use regex::Regex;
-use chrono::Datelike;
+use chrono::{Datelike, Local, NaiveDate};
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
 use anyhow::Context;
@@ -54,7 +54,7 @@ async fn fetch_rate(target_currency: &str, currency: &str) -> Result<f64> {
 }
 
 // Function to extract average values from the HTML response
-fn extract_average_values(html: &str, month: &str) -> (f64, f64) {
+fn extract_average_values(html: &str, month: &str, target_date: &str) -> (f64, f64, f64) {
     let document = Document::from(html);
 
     // Extract YTD average
@@ -88,14 +88,46 @@ fn extract_average_values(html: &str, month: &str) -> (f64, f64) {
         })
         .unwrap_or(0.0);
 
-    (ytd_avg, mtd_avg)
+    // Extract rate for the specified date
+    let mut rate = 0.0;
+    let table = document.find(Class("history-rates-data")).next();
+    if let Some(table) = table {
+        // Iterate over each <tr> element in the table
+        for tr in table.find(Name("tr")) {
+            // Find the <a> tag containing the date in YYYY-MM-DD format
+            if let Some(date_element) = tr.find(Class("n")).next() {
+                let date = date_element.text().trim().to_string();
+                // If the date matches the target date, extract the exchange rate
+                if date == target_date {
+                    // Extract exchange rate from <span> inside <td>
+                    if let Some(rate_element) = tr.find(Name("span")).next() {
+                        let rate_text = rate_element.text().trim().to_string();
+                        // Extract the numerical exchange rate part
+                        let rate_parts: Vec<&str> = rate_text.split_whitespace().collect();
+                        if rate_parts.len() == 5 {
+                            // Convert the exchange rate string to a floating-point value
+                            if let Ok(rate_value) = rate_parts[3].parse::<f64>() {
+                                rate = rate_value;
+                            }
+                        }
+                    }
+                    break;  // Break after finding the correct date
+                }
+            }
+        }
+    }
+
+    (ytd_avg, mtd_avg, rate)
 }
 
 #[tauri::command]
-async fn parser(target_currency: String) -> Result<Vec<CurrencyRate>, String> {
-    let year = chrono::Local::now().year();
-    let current_month = chrono::Local::now().month();
-    let month = chrono::NaiveDate::from_ymd_opt(year, current_month, 1)
+async fn parser(target_currency: String, date: Option<String>) -> Result<Vec<CurrencyRate>, String> {
+    let date = date
+        .and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok())
+        .unwrap_or_else(|| Local::now().date_naive());
+    let year = date.year();
+    let current_month = date.month();
+    let month = NaiveDate::from_ymd_opt(year, current_month, 1)
         .expect("Invalid date")
         .format("%B")
         .to_string();
@@ -111,6 +143,7 @@ async fn parser(target_currency: String) -> Result<Vec<CurrencyRate>, String> {
         let url = format!("https://www.exchange-rates.org/exchange-rate-history/{}-{}", exchange, year);
         let target_currency_clone = target_currency.clone(); // Clone target_currency to use inside async block
         let month_clone = month.clone(); // Clone month to use inside async block
+        let date_clone = date.format("%Y-%-m-%-d").to_string(); // Clone date to use inside async block
 
         // Spawn an async task for each currency exchange rate fetch
         let task = tokio::spawn({
@@ -118,9 +151,12 @@ async fn parser(target_currency: String) -> Result<Vec<CurrencyRate>, String> {
             async move {
                 match fetch_html(&url).await {
                     Ok(html) => {
-                        let (ytd_avg, mtd_avg) = extract_average_values(&html, &month_clone);
-                        let rate = fetch_rate(&target_currency_clone, &currency).await.expect("Failed to fetch exchange rate");
-
+                        let (ytd_avg, mtd_avg, mut rate) = extract_average_values(&html, &month_clone, &date_clone);
+                        if rate == 0.0 {
+                            rate = fetch_rate(&target_currency_clone, &currency)
+                                                .await
+                                                .expect("Failed to fetch exchange rate");
+                        };
                         Ok(Some(CurrencyRate {
                             from: target_currency_clone.to_string(),
                             to: currency,
