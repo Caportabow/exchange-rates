@@ -20,7 +20,7 @@ Built with **Rust + Tauri + Vite + Vue + TypeScript**, styled using **TailwindCS
 ## 🚧 Roadmap  
 🔹 **Cross-platform Support** – macOS & Linux support coming soon!  
 🔹 **Full Currency Conversion** – Convert to *any* currency, not just the top 6.  
-🔹 **Detailed View & Date Selection** – Historical rates and breakdowns.  
+✅ **Detailed View & Date Selection** – Historical rates and breakdowns.  
 
 ## 🖼️ Credits  
 🎨 Thanks to [Freepik](https://www.freepik.com) for the app icon design!  
