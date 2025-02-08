@@ -144,6 +144,7 @@ async fn parser(target_currency: String, date: Option<String>) -> Result<Vec<Cur
         let target_currency_clone = target_currency.clone(); // Clone target_currency to use inside async block
         let month_clone = month.clone(); // Clone month to use inside async block
         let date_clone = date.format("%Y-%-m-%-d").to_string(); // Clone date to use inside async block
+        let past_date = !(date == Local::now().date_naive());
 
         // Spawn an async task for each currency exchange rate fetch
         let task = tokio::spawn({
@@ -152,11 +153,12 @@ async fn parser(target_currency: String, date: Option<String>) -> Result<Vec<Cur
                 match fetch_html(&url).await {
                     Ok(html) => {
                         let (ytd_avg, mtd_avg, mut rate) = extract_average_values(&html, &month_clone, &date_clone);
-                        if rate == 0.0 {
+                        if !past_date {
                             rate = fetch_rate(&target_currency_clone, &currency)
                                                 .await
                                                 .expect("Failed to fetch exchange rate");
                         };
+
                         Ok(Some(CurrencyRate {
                             from: target_currency_clone.to_string(),
                             to: currency,
